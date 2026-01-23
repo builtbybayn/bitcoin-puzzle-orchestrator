@@ -192,9 +192,9 @@ Download on PC and check in Tailscale the IP for the Pi. Then run the SSH comman
 ```bash
 ssh user@yourIP
 ```
-
+<br>
 ## Connect Ethernet cable to Rig to share network
----
+
 First create a shared network interface on `eth0` the standard ethernet port in the Pi.
 ```bash
 sudo nmcli connection add type ethernet ifname eth0 ipv4.method shared con-name "SharedEthernet"
@@ -237,7 +237,7 @@ sudo nmcli connection up "Wired connection 1"
 
 <br><br>
 # Wake Rig from Pi
----
+
 Install `ethtool` on rig:
 ```bash
 sudo apt install ethtool -y
@@ -319,13 +319,13 @@ DISPLAY=:0 nvidia-settings -a "[fan:0]/GPUTargetFanSpeed=70"
 `nvidia-settings -a "[gpu:0]/GPUFanControlState=0"` - auto fan control
 
 ## Set fan speed (manual mode only)
-`nvidia-settings -a "[fan:0]/GPUTargetFanSpeed=70
+`nvidia-settings -a "[fan:0]/GPUTargetFanSpeed=70`
 
 ## Check current mode
 `nvidia-settings -q "[gpu:0]/GPUFanControlState"`
 
 ## Turn Fans On
----
+
 1. Start X server (headless display):
 ```bash
 sudo X :0
@@ -342,7 +342,7 @@ DISPLAY=:0 nvidia-settings -a "[fan:0]/GPUTargetFanSpeed=70"
 ```
 
 ## Turn Fans Off
----
+
 1. Start X server (headless display):
 ```bash
 sudo X :0
@@ -379,6 +379,7 @@ Current task END time: Wed Jan 14 23:07:41 202600:00] [0]
 # Telegram Alert Bot
 
 Create bot with `@botfather` then put your API key in the `.env` file.
+
 <br><br>
 # Working Makefile for KeyHunt with RTX 3080 (If you're having issues)
 
