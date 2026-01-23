@@ -104,7 +104,7 @@ For more information on how to:
 - access the server from any network
 - configure other details
 
-[[./SETUP.md|read the full setup guide here]].
+[read the full setup guide here](./SETUP.md).
 
 Once running, logs on the server should look like this, speed is in Million Keys per sec:
 ![Example Logs](./assets/logs.png)
