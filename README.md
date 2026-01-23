@@ -10,6 +10,7 @@ A compartmentalized setup for brute forcing bitcoin puzzle wallets. Server actin
 - High quality randomized guesses using crypto
 - Can support many miners at once
 
+[Alert Example](./assets/reports.png)
 
 ## Architecture
 Orchestrator (Server): 
