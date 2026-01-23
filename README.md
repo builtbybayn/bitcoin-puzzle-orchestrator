@@ -1,12 +1,12 @@
 
 # Bitcoin Puzzle Orchestrator
 
-A compartmentalized setup for brute forcing bitcoin puzzle wallets. Server acting as C2 and a "dumb" rig to do work and report back.
+A compartmentalized setup for brute forcing bitcoin puzzle wallets. Server acting as C2 and a "dumb" rig to do work and report back. The bitcoin puzzles are explained here.
 
 ## Features
 - Get Telegram messages of daily mining reports and urgent alerts when the key is found
 - Never guess the same key twice, systematically logs guesses without replacement
-- Built for keyhunt but works with other cracking software
+- Built for vanitysearch but works with other cracking software
 - High quality randomized guesses using crypto
 - Can support many miners at once
 
@@ -28,6 +28,8 @@ Rig (Client):
 
 
 ## Installation
+
+This runs on top of cracking software, I recommend using [this version of VanitySearch](https://github.com/allinbit/VanitySearch), download this and then you can install the following in the same directory:
 ### Orchestrator
 Clone the repo to your server (e.g., Raspberry Pi).
 ```bash
