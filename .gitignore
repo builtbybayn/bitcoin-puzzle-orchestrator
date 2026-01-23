@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Secrets
+.env
+
+# Database & State
+*.db
+*.db-journal
+monitor_state.json
+
+# Victory Files
+WINNER.txt
+WINNER_BACKUP.txt
+found.txt
+found.txt.*
+
+# Backups
+backups/*
+
+# Logs
+*.log
+npm-debug.log
+.DS_Store
+Thumbs.db
