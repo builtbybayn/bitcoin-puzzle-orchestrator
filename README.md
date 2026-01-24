@@ -1,7 +1,7 @@
 
 # Bitcoin Puzzle Orchestrator
 
-A compartmentalized setup for brute forcing bitcoin puzzle wallets. Server acting as C2 and a "dumb" rig to do work and report back. The bitcoin puzzles are explained here.
+A compartmentalized setup for brute forcing bitcoin puzzle wallets. Server acting as C2 and a "dumb" rig to do work and report back. The bitcoin puzzles are explained [here](#what-are-the-bitcoin-puzzles).
 
 ## Features
 - Get Telegram messages of daily mining reports and urgent alerts when the key is found
