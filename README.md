@@ -111,3 +111,35 @@ For more information on how to:
 
 Once running, logs on the server should look like this, speed is in Million Keys per sec:
 ![Example Logs](./assets/logs.png)
+
+## What are the Bitcoin Puzzles
+In 2015, before Bitcoin was valuable, somebody created a series of puzzles of increasing difficulty. They made Bitcoin wallets with private keys that were each one bit longer than the previous. The first being 1 bit, second being 2, and so on. There is now 160 total puzzles but they have only been solved up to 71.
+
+The reward for puzzle 71 is 7.1BTC. The normal Bitcoin private key is 256 bit, to crack it, you essentially need to guess 256 coin flips in a row correctly. But for 71, it is less. It's solvable with enough luck, though you'll still need quite a bit.
+
+The number of possibilities is:
+```
+one sextillion one hundred eighty quintillion five hundred ninety-one quadrillion six hundred trillion
+```
+
+But guessing over a billion keys per second, you can get a more reasonable chance of guessing correctly. Here's an example of your odds for 71 at 1.833BKeys/sec:
+```
+With ranges of 1.1 trillion, there is 1073265110 possible ranges. 
+
+Giving about a 1 in 1 billion chance every ten minutes (1.833B Keys/s)
+
+0.000000093173624% ≈ 10 minutes
+0.0000134170019% ≈ 24 hours
+0.0000939190132% ≈ 1 week
+0.037567605% ≈ 1 month
+```
+
+To learn more about the puzzle [visit this site](https://btcpuzzle.info/).
+
+## Cashing Out (Avoid Front-runners)
+
+There's a real issue with cashing out. Bots are set up so that when these challenge wallets get cracked and the winner submits a transaction, they pair the public key, with the public address to bring the solution from 2^71 to around 2^35, solvable in minutes on good GPU.
+
+Then, once it is solved, they also have the private key. They make a transaction, sending the full amount of funds to themself with a way bigger fee so they get picked up by the miners first and get the money. 
+
+The way to avoid this is to use MARA's slipstream service. They provide a service where they will not put your transaction on the public ledger but will silently put you on the next block. This is practically a guarantee not to get your winnings booked.
