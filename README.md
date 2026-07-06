@@ -1,7 +1,7 @@
 
 # Bitcoin Puzzle Orchestrator
 
-A compartmentalized setup for brute forcing bitcoin puzzle wallets. Server acting as C2 and a "dumb" rig to do work and report back. The bitcoin puzzles are explained here.
+A compartmentalized setup for brute forcing bitcoin puzzle wallets. Server acting as C2 and a "dumb" rig to do work and report back. The bitcoin puzzles are explained [here](#what-are-the-bitcoin-puzzles).
 
 ## Features
 - Get Telegram messages of daily mining reports and urgent alerts when the key is found
@@ -142,4 +142,8 @@ There's a real issue with cashing out. Bots are set up so that when these challe
 
 Then, once it is solved, they also have the private key. They make a transaction, sending the full amount of funds to themself with a way bigger fee so they get picked up by the miners first and get the money. 
 
+<<<<<<< HEAD
 The way to avoid this is to use MARA's slipstream service. They provide a service where they will not put your transaction on the public ledger but will silently put you on the next block. This is practically a guarantee not to get your winnings booked.
+=======
+The way to avoid this is to use MARA's slipstream service. They provide a service where they will not put your transaction on the public ledger but will silently put you on the next block. This is practically a guarantee not to get your winnings booked.
+>>>>>>> 60e9ce27b1489fa09ae1b4e0650bb218d18d9f6e
