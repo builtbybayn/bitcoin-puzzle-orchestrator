@@ -1,7 +1,6 @@
 # SSH
----
-## SSH into Pi
 
+## SSH into Pi
 SSH into the Pi with:
 ```bash
 ssh user@ip
@@ -40,9 +39,9 @@ Otherwise, to exit SSH without shutdown just run:
 exit
 ```
 
-
+<br><br>
 # Shutdown
----
+
 ## Shutdown the Pi
 ```bash
 sudo halt
@@ -56,10 +55,9 @@ sudo systemctl suspend
 sudo poweroff
 ```
 
-
-
+<br><br>
 # Running Server
----
+
 To start the `orchestrator` server, run:
 ```bash
 pm2 start server.js --name orchestrator
@@ -102,7 +100,7 @@ pm2 restart orchestrator
 pm2 unstartup systemd
 ```
 
-
+<br><br>
 # Running Rig
 ---
 Go to `Miner` directory:
@@ -139,9 +137,9 @@ To list all screen sessions:
 screen -ls
 ```
 
-
+<br><br>
 # Network Connections
----
+
 ## Get WIFI on the Pi
 To view the interfaces on the Pi run:
 ```
@@ -194,9 +192,9 @@ Download on PC and check in Tailscale the IP for the Pi. Then run the SSH comman
 ```bash
 ssh user@yourIP
 ```
-
+<br>
 ## Connect Ethernet cable to Rig to share network
----
+
 First create a shared network interface on `eth0` the standard ethernet port in the Pi.
 ```bash
 sudo nmcli connection add type ethernet ifname eth0 ipv4.method shared con-name "SharedEthernet"
@@ -237,9 +235,9 @@ Then apply it:
 sudo nmcli connection up "Wired connection 1"
 ```
 
-
+<br><br>
 # Wake Rig from Pi
----
+
 Install `ethtool` on rig:
 ```bash
 sudo apt install ethtool -y
@@ -260,9 +258,9 @@ Then run the command to send the "magic packet" that will wake the rig. Put in t
 sudo etherwake -i eth0 YOUR:MAC:ADDY:HERE
 ```
 
+<br><br>
+# Control Fans:
 
-# Control 3080 Fans:
----
 Controlling Nvidia GPU fans on a headless linux machine. War.
 
 First, download `xorg`:
@@ -321,13 +319,13 @@ DISPLAY=:0 nvidia-settings -a "[fan:0]/GPUTargetFanSpeed=70"
 `nvidia-settings -a "[gpu:0]/GPUFanControlState=0"` - auto fan control
 
 ## Set fan speed (manual mode only)
-`nvidia-settings -a "[fan:0]/GPUTargetFanSpeed=70
+`nvidia-settings -a "[fan:0]/GPUTargetFanSpeed=70`
 
 ## Check current mode
 `nvidia-settings -q "[gpu:0]/GPUFanControlState"`
 
 ## Turn Fans On
----
+
 1. Start X server (headless display):
 ```bash
 sudo X :0
@@ -344,7 +342,7 @@ DISPLAY=:0 nvidia-settings -a "[fan:0]/GPUTargetFanSpeed=70"
 ```
 
 ## Turn Fans Off
----
+
 1. Start X server (headless display):
 ```bash
 sudo X :0
@@ -360,9 +358,9 @@ DISPLAY=:0 nvidia-settings -a "[gpu:0]/GPUFanControlState=1"
 DISPLAY=:0 nvidia-settings -a "[gpu:0]/GPUFanControlState=0"
 ```
 
-
+<br><br>
 # Example Keyhunt output
----
+
 ```
 user@pop-os:~/Miner$ /home/user/Miner/VanitySearch/vanitysearch -t 0 -gpu -i targets.txt --keyspace 20000000000000000:+500000000
 VanitySearch v1.17 Linux with BitCrack integration
@@ -377,13 +375,14 @@ Divide by 0!
 Current task END time: Wed Jan 14 23:07:41 202600:00] [0]
 ```
 
-
+<br><br>
 # Telegram Alert Bot
----
+
 Create bot with `@botfather` then put your API key in the `.env` file.
 
+<br><br>
 # Working Makefile for KeyHunt with RTX 3080 (If you're having issues)
----
+
 ```bash
 cat << 'EOF' > Makefile
 # Hardcoded Makefile for RTX 3080 (Ampere)

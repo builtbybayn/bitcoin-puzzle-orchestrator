@@ -11,6 +11,8 @@ import sqlite3 from 'sqlite3';
 import fs from 'fs';
 import { exec } from 'child_process';
 import crypto from 'crypto'; // Native Node.js crypto for secure grid generation
+import http from 'http';
+import https from 'https';
 
 const app = express();
 
@@ -18,6 +20,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const RIG_MAC_ADDRESS = process.env.RIG_MAC_ADDRESS;
 const ALLOWED_IP_PREFIX = process.env.ALLOWED_IP_PREFIX || '10.42.';
+
+// OPTIONAL PORTFOLIO STATUS PUSH
+// If both values are set, the server sends a small, sanitized status payload
+// after each completed chunk. Leave these blank to disable the feature.
+const PORTFOLIO_STATUS_URL = process.env.PORTFOLIO_STATUS_URL;
+const PORTFOLIO_STATUS_TOKEN = process.env.PORTFOLIO_STATUS_TOKEN;
 
 // --- PUZZLE CONFIGURATION (Puzzle #71) ---
 const PUZZLE_START = BigInt("0x400000000000000000");
@@ -168,9 +176,9 @@ app.post('/submit-work', (req, res) => {
     db.get(`SELECT started_at, start_hex, end_hex FROM ranges WHERE id = ?`, [id], (err, row) => {
         if (!row) return res.send("ACK");
 
-        const duration = ((now - row.started_at) / 1000).toFixed(2); // Seconds
+        const durationSeconds = Number(((now - row.started_at) / 1000).toFixed(2)); // Seconds
 
-        console.log(`[REPORT] [${timeStr}] Job #${id} (${result}) - Duration: ${duration}s`);
+        console.log(`[REPORT] [${timeStr}] Job #${id} (${result}) - Duration: ${durationSeconds}s`);
         console.log(`         Speed: ${speed}`);
 
         if (result === 'FOUND') {
@@ -193,7 +201,8 @@ app.post('/submit-work', (req, res) => {
             }
 
             // Priority 3: Update Database (Async)
-            db.run(`UPDATE ranges SET status = 'FOUND', completed_at = ? WHERE id = ?`, [now, id]);
+            // Also triggers the optional portfolio status push after the DB update succeeds.
+            completeJobAndPushStatus(id, 'FOUND', now, speed, durationSeconds);
 
             // Finally TRIGGER ALERT
             // We use process.execPath to ensure we use the same 'node' that is running this server
@@ -212,10 +221,108 @@ app.post('/submit-work', (req, res) => {
 
         } else {
             // Mark as DONE
-            db.run(`UPDATE ranges SET status = 'DONE', completed_at = ? WHERE id = ?`, [now, id]);
+            // Also triggers the optional portfolio status push after the DB update succeeds.
+            completeJobAndPushStatus(id, 'DONE', now, speed, durationSeconds);
         }
         res.send("ACK");
     });
 });
 
 app.listen(PORT, '0.0.0.0', () => console.log(`--- ORCHESTRATOR ONLINE (Secure/Grid/Production) ---\nAllowed IP: 10.42.x.x`));
+
+// --- OPTIONAL PORTFOLIO STATUS PUSH ---
+// This section is intentionally isolated so it can be removed cleanly.
+// To remove the feature:
+// 1. Delete the PORTFOLIO_STATUS_URL / PORTFOLIO_STATUS_TOKEN config above.
+// 2. Replace completeJobAndPushStatus(...) calls with the original db.run(...)
+//    completion updates for FOUND and DONE.
+// 3. Delete everything in this section.
+//
+// This feature never reads the portfolio API response body, never executes
+// remote data, and never sends secrets, ranges, private keys, logs, IPs, or
+// machine identifiers. Failed pushes are logged only and do not stop mining.
+function completeJobAndPushStatus(id, status, completedAt, speed, durationSeconds) {
+    db.run(`UPDATE ranges SET status = ?, completed_at = ? WHERE id = ?`, [status, completedAt, id], (err) => {
+        if (err) {
+            console.error(`[DB] Failed to mark job #${id} as ${status}:`, err.message);
+            return;
+        }
+
+        pushPortfolioStatus({
+            currentJob: Number(id),
+            latestSpeed: speed ?? null,
+            lastChunkDurationSeconds: durationSeconds,
+            reportedTimestamp: new Date(completedAt).toISOString()
+        });
+    });
+}
+
+function pushPortfolioStatus(partialPayload) {
+    if (!PORTFOLIO_STATUS_URL) return;
+
+    if (!PORTFOLIO_STATUS_TOKEN) {
+        console.warn("[PORTFOLIO] PORTFOLIO_STATUS_URL is set but PORTFOLIO_STATUS_TOKEN is missing. Skipping status push.");
+        return;
+    }
+    db.get(`SELECT count(*) as completedChunks FROM ranges WHERE status IN ('DONE', 'FOUND')`, [], (err, row) => {
+        if (err) {
+            console.error("[PORTFOLIO] Failed to calculate mining status:", err.message);
+            return;
+        }
+
+        const completedChunks = row?.completedChunks || 0;
+        const totalKeysChecked = (BigInt(completedChunks) * CHUNK_SIZE).toString();
+
+        postPortfolioStatus({
+            currentJob: partialPayload.currentJob,
+            completedChunks,
+            totalKeysChecked,
+            latestSpeed: partialPayload.latestSpeed,
+            lastChunkDurationSeconds: partialPayload.lastChunkDurationSeconds,
+            reportedTimestamp: partialPayload.reportedTimestamp
+        });
+    });
+}
+
+function postPortfolioStatus(payload) {
+    let url;
+    try {
+        url = new URL(PORTFOLIO_STATUS_URL);
+    } catch (err) {
+        console.error("[PORTFOLIO] Invalid PORTFOLIO_STATUS_URL:", err.message);
+        return;
+    }
+    const client = url.protocol === 'https:' ? https : url.protocol === 'http:' ? http : null;
+    if (!client) {
+        console.error(`[PORTFOLIO] Unsupported status URL protocol: ${url.protocol}`);
+        return;
+    }
+
+    const body = JSON.stringify(payload);
+    const req = client.request(url, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${PORTFOLIO_STATUS_TOKEN}`,
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(body)
+        }
+    }, (res) => {
+        res.resume();
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+            console.log(`[PORTFOLIO] Status pushed for job #${payload.currentJob}.`);
+        } else {
+            console.warn(`[PORTFOLIO] Status push failed with HTTP ${res.statusCode}.`);
+        }
+    });
+
+    req.setTimeout(5000, () => {
+        req.destroy(new Error("Status push timed out"));
+    });
+
+    req.on('error', (err) => {
+        console.warn("[PORTFOLIO] Status push failed:", err.message);
+    });
+
+    req.write(body);
+    req.end();
+}
