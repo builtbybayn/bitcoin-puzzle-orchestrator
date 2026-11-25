@@ -9,7 +9,7 @@ import 'dotenv/config';
 import express from 'express';
 import sqlite3 from 'sqlite3';
 import fs from 'fs';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import crypto from 'crypto'; // Native Node.js crypto for secure grid generation
 import http from 'http';
 import https from 'https';
@@ -19,7 +19,18 @@ const app = express();
 // CONFIGURATION
 const PORT = process.env.PORT || 3000;
 const RIG_MAC_ADDRESS = process.env.RIG_MAC_ADDRESS;
+// Network interface that is connected to the rig (find it with `ip addr`)
+const WOL_INTERFACE = process.env.WOL_INTERFACE || 'eth0';
 const ALLOWED_IP_PREFIX = process.env.ALLOWED_IP_PREFIX || '10.42.';
+
+// PATHS
+// Versions before DB_PATH was supported always used /mnt/usb_storage. If that database
+// is there, keep using it: starting an empty one would repeat work already done.
+const LEGACY_DIR = '/mnt/usb_storage';
+const DB_PATH = process.env.DB_PATH ||
+    (fs.existsSync(`${LEGACY_DIR}/mining.db`) ? `${LEGACY_DIR}/mining.db` : './mining.db');
+const WINNER_PATH = process.env.WINNER_PATH ||
+    (fs.existsSync(LEGACY_DIR) ? `${LEGACY_DIR}/WINNER.txt` : './WINNER.txt');
 
 // OPTIONAL PORTFOLIO STATUS PUSH
 // If both values are set, the server sends a small, sanitized status payload
@@ -36,7 +47,12 @@ const CHUNK_SIZE = BigInt("1100000000000");
 
 // --- DATABASE SETUP ---
 const sql = sqlite3.verbose();
-const db = new sql.Database('/mnt/usb_storage/mining.db');
+const db = new sql.Database(DB_PATH, (err) => {
+    if (err) {
+        console.error(`[DB] Could not open ${DB_PATH}: ${err.message}`);
+        process.exit(1);
+    }
+});
 
 db.serialize(() => {
     // Note: start_hex is UNIQUE. This works with the logic below to prevent repeats.
@@ -49,6 +65,11 @@ db.serialize(() => {
         started_at INTEGER,
         completed_at INTEGER
     )`);
+
+    // If this shows 0 and you have mined before, the wrong database is being used.
+    db.get(`SELECT count(*) as completed FROM ranges WHERE status IN ('DONE', 'FOUND')`, [], (err, row) => {
+        if (!err) console.log(`[DB] ${DB_PATH} (${row.completed} completed ranges)`);
+    });
 });
 
 app.use(express.json());
@@ -56,7 +77,7 @@ app.use(express.json());
 // --- MIDDLEWARE: IP SECURITY (RELAXED) ---
 app.use((req, res, next) => {
     const requestIP = req.ip.replace('::ffff:', '');
-    if (requestIP === '127.0.0.1' || requestIP.startsWith('10.42.')) {
+    if (requestIP === '127.0.0.1' || requestIP === '::1' || requestIP.startsWith(ALLOWED_IP_PREFIX)) {
         next();
     } else {
         console.warn(`[SECURITY] Blocked request from unauthorized IP: ${requestIP}`);
@@ -93,10 +114,13 @@ function generateRandomRange() {
 
 // --- API: WAKE RIG ---
 app.get('/wake', (req, res) => {
-    console.log("[WOL] Sending Magic Packet to Rig...");
-    exec(`sudo etherwake -i eth0 ${RIG_MAC_ADDRESS}`, (err, stdout, stderr) => {
+    if (!RIG_MAC_ADDRESS) {
+        return res.status(500).send("RIG_MAC_ADDRESS is not set");
+    }
+    console.log(`[WOL] Sending Magic Packet to Rig on ${WOL_INTERFACE}...`);
+    execFile('sudo', ['etherwake', '-i', WOL_INTERFACE, RIG_MAC_ADDRESS], (err, stdout, stderr) => {
         if (err) {
-            console.error(`[WOL] Error: ${stderr}`);
+            console.error(`[WOL] Error: ${stderr || err.message}`);
             return res.status(500).send("WOL Failed");
         }
         res.send("Magic Packet Sent");
@@ -173,62 +197,91 @@ app.post('/submit-work', (req, res) => {
     const now = Date.now();
     const timeStr = new Date(now).toLocaleTimeString('en-US', { hour12: false });
 
+    if (result !== 'DONE' && result !== 'FOUND') {
+        return res.status(400).send("Unknown result");
+    }
+
     db.get(`SELECT started_at, start_hex, end_hex FROM ranges WHERE id = ?`, [id], (err, row) => {
-        if (!row) return res.send("ACK");
+        // A found key is saved first, even if the job is unknown or the database is broken.
+        if (result === 'FOUND') {
+            const range = row ? `0x${row.start_hex} -> 0x${row.end_hex}` : 'unknown';
+            const msg = `\n[VICTORY] KEY FOUND: ${key}\nRange: ${range}\nTime: ${timeStr}\n`;
+            console.log(msg);
+
+            // Not confirmed, so the rig keeps its copy and tries again
+            if (!saveWinner(msg)) return res.status(500).send("Could not save key");
+            triggerAlert();
+        } else if (err) {
+            console.error(err);
+            return res.status(500).send("Database Error");
+        }
+
+        if (!row) {
+            console.warn(`[REPORT] Job #${id} (${result}) is not in the database.`);
+            return res.send("ACK");
+        }
 
         const durationSeconds = Number(((now - row.started_at) / 1000).toFixed(2)); // Seconds
 
         console.log(`[REPORT] [${timeStr}] Job #${id} (${result}) - Duration: ${durationSeconds}s`);
         console.log(`         Speed: ${speed}`);
 
-        if (result === 'FOUND') {
-            const msg = `\n[VICTORY] KEY FOUND: ${key}\nRange: 0x${row.start_hex} -> 0x${row.end_hex}\nTime: ${timeStr}\n`;
-
-            console.log(msg);
-
-            // Priority 1: Save to USB (Synchronous)
-            try {
-                fs.appendFileSync('/mnt/usb_storage/WINNER.txt', msg);
-            } catch (err) {
-                console.error("[ERROR] USB Write Failed:", err.message);
-            }
-
-            // Priority 2: Save to Local SD (Synchronous)
-            try {
-                fs.appendFileSync('./WINNER.txt', msg);
-            } catch (err) {
-                console.error("[ERROR] Local Write Failed:", err.message);
-            }
-
-            // Priority 3: Update Database (Async)
-            // Also triggers the optional portfolio status push after the DB update succeeds.
-            completeJobAndPushStatus(id, 'FOUND', now, speed, durationSeconds);
-
-            // Finally TRIGGER ALERT
-            // We use process.execPath to ensure we use the same 'node' that is running this server
-            try {
-                console.log("[ALERT] Triggering notification script...");
-                exec(`${process.execPath} alert.js check`, (error, stdout, stderr) => {
-                    if (error) {
-                        console.error(`[ALERT ERROR] Failed to run script: ${error.message}`);
-                        return;
-                    }
-                    console.log("[ALERT] Notification script launched successfully.");
-                });
-            } catch (e) {
-                console.error("[ALERT CRITICAL] Could not trigger alert:", e.message);
-            }
-
-        } else {
-            // Mark as DONE
-            // Also triggers the optional portfolio status push after the DB update succeeds.
-            completeJobAndPushStatus(id, 'DONE', now, speed, durationSeconds);
-        }
-        res.send("ACK");
+        // Also triggers the optional portfolio status push after the DB update succeeds.
+        completeJobAndPushStatus(id, result, now, speed, durationSeconds, (dbErr) => {
+            // The key is already safe, so only an unsaved DONE needs a retry
+            if (dbErr && result === 'DONE') return res.status(500).send("Database Error");
+            res.send("ACK");
+        });
     });
 });
 
-app.listen(PORT, '0.0.0.0', () => console.log(`--- ORCHESTRATOR ONLINE (Secure/Grid/Production) ---\nAllowed IP: 10.42.x.x`));
+// Writes the key to every location (Synchronous). Returns true if at least one worked.
+function saveWinner(msg) {
+    let saved = false;
+    for (const file of new Set([WINNER_PATH, './WINNER.txt'])) {
+        try {
+            fs.appendFileSync(file, msg);
+            saved = true;
+        } catch (err) {
+            console.error(`[ERROR] Writing ${file} failed:`, err.message);
+        }
+    }
+    return saved;
+}
+
+function triggerAlert() {
+    // We use process.execPath to ensure we use the same 'node' that is running this server
+    console.log("[ALERT] Triggering notification script...");
+    execFile(process.execPath, ['alert.js', 'check'], (error) => {
+        if (error) {
+            console.error(`[ALERT ERROR] Failed to run script: ${error.message}`);
+            return;
+        }
+        console.log("[ALERT] Notification script finished.");
+    });
+}
+
+// --- API: RETURN UNFINISHED WORK ---
+// The rig calls this when it is stopped or crashes partway through a range.
+// Clearing started_at makes the range the first in line to be assigned again.
+app.post('/release-work', (req, res) => {
+    const { id } = req.body;
+    const workerIp = req.ip.replace('::ffff:', '');
+
+    db.run(`UPDATE ranges SET started_at = 0 WHERE id = ? AND status = 'PROCESSING' AND assigned_to = ?`,
+        [id, workerIp],
+        function (err) {
+            if (err) {
+                console.error(err);
+                return res.status(500).send("Database Error");
+            }
+            if (this.changes) console.log(`[RELEASE] Job #${id} returned unfinished by ${workerIp}`);
+            res.send("ACK");
+        }
+    );
+});
+
+app.listen(PORT, '0.0.0.0', () => console.log(`--- ORCHESTRATOR ONLINE (Secure/Grid/Production) ---\nAllowed IP prefix: ${ALLOWED_IP_PREFIX}`));
 
 // --- OPTIONAL PORTFOLIO STATUS PUSH ---
 // This section is intentionally isolated so it can be removed cleanly.
@@ -241,12 +294,13 @@ app.listen(PORT, '0.0.0.0', () => console.log(`--- ORCHESTRATOR ONLINE (Secure/G
 // This feature never reads the portfolio API response body, never executes
 // remote data, and never sends secrets, ranges, private keys, logs, IPs, or
 // machine identifiers. Failed pushes are logged only and do not stop mining.
-function completeJobAndPushStatus(id, status, completedAt, speed, durationSeconds) {
+function completeJobAndPushStatus(id, status, completedAt, speed, durationSeconds, callback = () => { }) {
     db.run(`UPDATE ranges SET status = ?, completed_at = ? WHERE id = ?`, [status, completedAt, id], (err) => {
         if (err) {
             console.error(`[DB] Failed to mark job #${id} as ${status}:`, err.message);
-            return;
+            return callback(err);
         }
+        callback(null);
 
         pushPortfolioStatus({
             currentJob: Number(id),

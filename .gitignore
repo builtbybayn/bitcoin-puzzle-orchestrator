@@ -14,6 +14,8 @@ WINNER.txt
 WINNER_BACKUP.txt
 found.txt
 found.txt.*
+FOUND_KEY_*.txt
+targets.txt
 
 # Backups
 backups/*

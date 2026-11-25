@@ -2,7 +2,7 @@ import 'dotenv/config'; // Load .env
 import express from 'express';
 import sqlite3 from 'sqlite3';
 import fs from 'fs';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import path from 'path'; // Needed for path defaults
 
 const app = express();
@@ -12,6 +12,7 @@ const PORT = process.env.PORT || 3000;
 // Updated to use the Prefix from .env to allow the whole subnet
 const ALLOWED_IP_PREFIX = process.env.ALLOWED_IP_PREFIX || '10.42.';
 const RIG_MAC_ADDRESS = process.env.RIG_MAC_ADDRESS;
+const WOL_INTERFACE = process.env.WOL_INTERFACE || 'eth0';
 
 // --- PATHS ---
 const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), 'mining.db');
@@ -68,7 +69,7 @@ function generateRandomRange() {
 // --- API: WAKE RIG ---
 app.get('/wake', (req, res) => {
     console.log("[WOL] Sending Magic Packet to Rig...");
-    exec(`sudo etherwake -i eth0 ${RIG_MAC_ADDRESS}`, (err, stdout, stderr) => {
+    execFile('sudo', ['etherwake', '-i', WOL_INTERFACE, RIG_MAC_ADDRESS || ''], (err, stdout, stderr) => {
         if (err) {
             console.error(`[WOL] Error: ${stderr}`);
             return res.status(500).send("WOL Failed");

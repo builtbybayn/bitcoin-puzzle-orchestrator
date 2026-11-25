@@ -35,27 +35,32 @@ Clone the repo to your server (e.g., Raspberry Pi).
 ```bash
 cd orchestrator
 npm install
-cp .env.example .env 
-# Edit .env with your preferences node index.js
+cp ../.env.example .env
+# Edit .env with your preferences, then:
+node server.js
 ```
 
 ### Rig (GPU Client)
 Clone the repo to the mining rig:
 ```bash
-cd miner
-# Ensure you have 'jq' and 'curl' installed
-sudo apt install jq curl
-cp .env.example .env
-# Configure SERVER_IP in .env
-./miner.sh
+cd rig
+# Ensure you have 'jq', 'curl' and 'python3' installed
+sudo apt install jq curl python3
+cp ../.env.example .env
+# Configure SERVER_IP and MINER_BINARY in .env
+bash miner.sh
 ```
+
+Update the orchestrator before the rig, so the rig can return unfinished work.
+
+You can stop the miner at any time. A range only counts as searched when the miner reports that it covered all of it; anything interrupted is returned to the orchestrator and searched again later. A found key is saved on the rig as `FOUND_KEY_*.pending.txt` until the orchestrator confirms it.
 
 
 ## Configuration (.env)
 Rename `.env.example` to `.env` and fill in your details:
 ```
 SERVER_IP=192.168.1.100
-TARGET_ADDRESS=13zb1hQbWVsc2S7ZTZnP2G49vgCNJrQ5
+TARGET_ADDRESS=1PWo3JeB9jrGwfHDNpdGK54CRas7fsVzXU
 TELEGRAM_BOT_TOKEN=your_token_here
 ```
 

@@ -1,8 +1,9 @@
 #!/bin/bash
 # Loops and every five seconds checks if temps are 80C or greater. If so will pause the rig and wait until it's cooled to 60C
 
-if [ -f .env ]; then
-    export $(grep -v '^#' .env | xargs)
+# When started by miner.sh, MINER_BINARY is already in the environment
+if [ -z "$MINER_BINARY" ] && [ -f .env ]; then
+    MINER_BINARY=$(grep '^MINER_BINARY=' .env | tail -n 1 | cut -d '=' -f 2- | tr -d '\r')
 fi
 
 # CONFIGURATION (LONGEVITY MODE)
@@ -29,6 +30,12 @@ while true; do
     if [ -z "$PID" ]; then
         sleep 5
         continue
+    fi
+
+    # A new miner process always starts unpaused
+    if [ "$PID" != "$LAST_PID" ]; then
+        PAUSED=false
+        LAST_PID=$PID
     fi
 
     # EMERGENCY: Too Hot

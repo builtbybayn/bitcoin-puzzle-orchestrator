@@ -19,12 +19,17 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
 // Get from @CallMeBot_txt2voicebot (include the @ symbol if instructed)
-const CALLMEBOT_USER = process.env.TELEGRAM_USERNAME;
+// The other two names were used by older versions of this project
+const CALLMEBOT_USER = process.env.CALLMEBOT_USER || process.env.TELEGRAM_USERNAME || process.env.TELGRAM_USERNAME;
 
 // --- MINING CONFIG ---
 const CHUNK_SIZE = 1100000000000n; // 1.1 Trillion
-const DB_PATH = process.env.DB_PATH || './mining.db';
-const WINNER_PATH = process.env.WINNER_PATH || './WINNER.txt';
+// These defaults must match server.js
+const LEGACY_DIR = '/mnt/usb_storage';
+const DB_PATH = process.env.DB_PATH ||
+    (fs.existsSync(`${LEGACY_DIR}/mining.db`) ? `${LEGACY_DIR}/mining.db` : './mining.db');
+// server.js also writes ./WINNER.txt as a backup in case the main location fails
+const WINNER_PATHS = [process.env.WINNER_PATH || `${LEGACY_DIR}/WINNER.txt`, './WINNER.txt'];
 // New: File to track previous state (prevents spamming alerts)
 const STATE_FILE = process.env.STATE_FILE || './monitor_state.json';
 
@@ -32,20 +37,28 @@ const STATE_FILE = process.env.STATE_FILE || './monitor_state.json';
 async function sendTelegram(text) {
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
     try {
-        await fetch(url, {
+        const res = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: CHAT_ID, text: text })
         });
+        if (!res.ok) console.error(`Telegram Error: HTTP ${res.status}. Check TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.`);
     } catch (e) {
         console.error("Telegram Error:", e.message);
     }
 }
 
 async function makePhoneCall(text) {
+    if (!CALLMEBOT_USER) {
+        console.error("Call Error: CALLMEBOT_USER is not set in .env, so no phone call was made.");
+        return;
+    }
     const encodedText = encodeURIComponent(text);
-    const url = `http://api.callmebot.com/start.php?user=${CALLMEBOT_USER}&text=${encodedText}&lang=en-US-Standard-C&rpt=2`;
-    try { await fetch(url); } catch (e) { console.error("Call Error:", e.message); }
+    const url = `http://api.callmebot.com/start.php?user=${encodeURIComponent(CALLMEBOT_USER)}&text=${encodedText}&lang=en-US-Standard-C&rpt=2`;
+    try {
+        const res = await fetch(url);
+        if (!res.ok) console.error(`Call Error: HTTP ${res.status}`);
+    } catch (e) { console.error("Call Error:", e.message); }
 }
 
 // --- LOGIC ---
@@ -53,7 +66,7 @@ const mode = process.argv[2];
 
 if (mode === 'check') {
     // 1. VICTORY CHECK
-    if (fs.existsSync(WINNER_PATH)) {
+    if (WINNER_PATHS.some((file) => fs.existsSync(file))) {
         console.log("WINNER FILE FOUND! TRIGGERING ALARM!");
         const secureMsg = `VICTORY DECLARED\n\n` +
             `A winner file has been detected on the USB drive.\n` +

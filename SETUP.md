@@ -103,9 +103,9 @@ pm2 unstartup systemd
 <br><br>
 # Running Rig
 ---
-Go to `Miner` directory:
+Go to the `rig` directory:
 ```
-cd Miner
+cd rig
 ```
 
 In the rig terminal, start a "Screen" session to keep it running even after you `exit`:
@@ -115,7 +115,7 @@ screen -S mining_session
 
 Start the miner:
 ```bash
-sudo ./miner.sh
+sudo bash miner.sh
 ```
 
 Detach:
@@ -257,6 +257,8 @@ Then run the command to send the "magic packet" that will wake the rig. Put in t
 ```bash
 sudo etherwake -i eth0 YOUR:MAC:ADDY:HERE
 ```
+
+If your interface isn't `eth0`, also set `WOL_INTERFACE` in the server's `.env`.
 
 <br><br>
 # Control Fans:
